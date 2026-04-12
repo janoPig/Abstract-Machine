@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="examples">
+      <UniqueIdentifier>{e0a3e87f-ed9a-4997-9897-22780a0f65a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="gtest">
+      <UniqueIdentifier>{4076a7af-c357-43bf-8e4a-925d679002dd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{0216a911-7898-410c-85d3-18968b2e6bc6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="test">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="test.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_tests.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
+    <ClCompile Include="eigen_test.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
+    <ClCompile Include="dsl_tests.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
+    <ClCompile Include="extended_tests.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\gtest\GTestLite.h">
+      <Filter>gtest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\AbstractVM.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\Defs.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\DSLCompiler.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\Expected.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\InstructionSet.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\OpImpl.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\TypeErasedVM.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\TypePack.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\TypeRegister.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\Utils.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\examples\EigenOps.h">
+      <Filter>examples</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
