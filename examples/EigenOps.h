@@ -85,6 +85,8 @@ namespace EigenOps
 			m_rows = 0; m_cols = 0;
 		}
 
+		// NOTE: This operator is intended strictly for unit tests.
+		// It provides value-based comparison with proper handling per underlying type T.
 		bool operator==(const EBase& other) const noexcept
 		{
 			if (m_rows != other.m_rows || m_cols != other.m_cols)
@@ -95,7 +97,14 @@ namespace EigenOps
 			{
 				return true;
 			}
-			return view() == other.view();
+			if constexpr (std::is_floating_point_v<T>)
+			{ // Use Eigen approximate comparison for floating point types
+				return view().isApprox(other.view());
+			}
+			else
+			{ // Exact comparison for all non-floating types
+				return (view().array() == other.view().array()).all();
+			}
 		}
 
 		FORCE_INLINE auto size() const noexcept

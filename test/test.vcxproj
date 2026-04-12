@@ -143,6 +143,7 @@
     <ClCompile Include="dsl_tests.cpp" />
     <ClCompile Include="eigen_test.cpp" />
     <ClCompile Include="extended_tests.cpp" />
+    <ClCompile Include="scalar_tests.cpp" />
     <ClCompile Include="test.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
@@ -153,6 +154,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\examples\EigenOps.h" />
+    <ClInclude Include="..\examples\ScalarOps.h" />
     <ClInclude Include="..\gtest\GTestLite.h" />
     <ClInclude Include="..\include\AbstractVM.h" />
     <ClInclude Include="..\include\Defs.h" />
@@ -164,6 +166,8 @@
     <ClInclude Include="..\include\TypePack.h" />
     <ClInclude Include="..\include\TypeRegister.h" />
     <ClInclude Include="..\include\Utils.h" />
+    <ClInclude Include="ScalarTestOps.h" />
+    <ClInclude Include="TestDslUtils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

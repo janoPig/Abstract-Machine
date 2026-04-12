@@ -1,39 +1,21 @@
 #include "../gtest/GTestLite.h"
+#include "ScalarTestOps.h"
+#include "TestDslUtils.h"
 #include "../include/DSLCompiler.h"
 #include "../include/AbstractVM.h"
 #include "../include/OpImpl.h"
-#include <cmath>
 
 using namespace AbstractVM;
+
+template<typename CompilerT, typename ProgramT>
+static void CompileOrFail(const CompilerT& compiler, const char* dsl, ProgramT& program)
+{
+	TestDslUtils::CompileOrFail(compiler, dsl, program);
+}
 
 // =============================================================================
 // Op Library for Edge Case Tests
 // =============================================================================
-
-static void OpFAdd(float& d, const float& a, const float& b) noexcept { d = a + b; }
-static void OpFMul(float& d, const float& a, const float& b) noexcept { d = a * b; }
-static void OpFDiv(float& d, const float& a, const float& b) noexcept { d = a / b; }
-static void OpFSqrt(float& d, const float& a)               noexcept { d = std::sqrt(a); }
-static void OpF2I(int& d, const float& a)                   noexcept { d = static_cast<int>(a); }
-static void OpI2F(float& d, const int& a)                   noexcept { d = static_cast<float>(a); }
-static void OpIAdd(int& d, const int& a, const int& b)      noexcept { d = a + b; }
-
-static bool ValFDivNonZero(const float& /*d*/, const float& /*a*/, const float& b) noexcept
-{
-	return b != 0.0f;
-}
-
-static constexpr OpDescriptor g_edgeCaseOps[] =
-{
-	{ "Add",  &CreateOp<OpFAdd>                          },
-	{ "Mul",  &CreateOp<OpFMul>                          },
-	{ "Div",  &CreateOp<OpFDiv, ValFDivNonZero>          },
-	{ "Sqrt", &CreateOp<OpFSqrt>                         },
-	{ "F2I",  &CreateOp<OpF2I>                           },
-	{ "I2F",  &CreateOp<OpI2F>                           },
-};
-
-static TypeRegisterT<float, int> g_edgeCaseReg;
 
 // =============================================================================
 // SECTION: Stack Boundary Conditions
@@ -47,12 +29,10 @@ protected:
 		static constexpr size_t DstMaxArity = 2;
 		static constexpr size_t SrcMaxArity = 2;
 		static constexpr size_t MaxProgramSize = 16;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 0;
 	};
 
 	using VMF = MachineImpl<TestConfig, TypePack<float, int>, TypePack<>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMF::Config>;
 	using ProgramT = VMF::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 
@@ -60,7 +40,7 @@ protected:
 
 	void SetUp() override
 	{
-		ASSERT_TRUE(vm.AddInstructions(g_edgeCaseOps));
+		ASSERT_TRUE(vm.AddInstructions(ScalarTestOps::kEdgeCaseOps));
 	}
 
 	DslCompilerT Compiler() const
@@ -74,8 +54,7 @@ TEST_F(StackBoundaryTest, StackAtCapacity_ExecutesSuccessfully)
 	// Fill stack to exact capacity (2 items)
 	auto c = Compiler();
 	VMF::ProgramT prog(4, 0);
-	const auto res = c.Compile("Add I[0] I[1]\nMul S[0] I[0]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res);
+	CompileOrFail(c, "Add I[0] I[1]\nMul S[0] I[0]\n", prog);
 
 	VMF::InputT input(2);
 	input.GetData<float>()[0] = 2.0f;
@@ -92,8 +71,7 @@ TEST_F(StackBoundaryTest, SingleItemStack_Works)
 	// Single-item stack test with capacity 1
 	auto c = Compiler();
 	VMF::ProgramT prog(4, 0);
-	const auto res = c.Compile("Add I[0] I[1]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res);
+	CompileOrFail(c, "Add I[0] I[1]\n", prog);
 
 	VMF::InputT input(2);
 	input.GetData<float>()[0] = 5.0f;
@@ -110,8 +88,7 @@ TEST_F(StackBoundaryTest, StackReset_ClearsPointers)
 	// Run program twice, verify stack resets between runs
 	auto c = Compiler();
 	VMF::ProgramT prog(4, 0);
-	const auto res = c.Compile("Add I[0] I[1]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res);
+	CompileOrFail(c, "Add I[0] I[1]\n", prog);
 
 	VMF::InputT input(2);
 	input.GetData<float>()[0] = 1.0f;
@@ -142,12 +119,10 @@ protected:
 		static constexpr size_t DstMaxArity = 2;
 		static constexpr size_t SrcMaxArity = 2;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 2;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 
@@ -155,7 +130,7 @@ protected:
 
 	void SetUp() override
 	{
-		ASSERT_TRUE(vm.AddInstructions(g_edgeCaseOps));
+		ASSERT_TRUE(vm.AddInstructions(ScalarTestOps::kEdgeCaseOps));
 	}
 
 	DslCompilerT Compiler() const
@@ -175,8 +150,7 @@ TEST_F(TypeValidationTest, ConversionF2I_CorrectStackTracking)
 	// After F2I, int stack should have 1 item
 	auto c = Compiler();
 	VMM::ProgramT prog(8, 0);
-	const auto res = c.Compile("F2I I[0]\nI2F S[0]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+	CompileOrFail(c, "F2I I[0]\nI2F S[0]\n", prog);
 
 	VMM::InputT input(1);
 	input.GetData<float>()[0] = 3.7f;
@@ -196,13 +170,12 @@ TEST_F(TypeValidationTest, MixedTypeChain_ManagesIndependentStacks)
 	// Verify both stacks track independently
 	auto c = Compiler();
 	VMM::ProgramT prog(16, 0);
-	const auto res = c.Compile(
+	CompileOrFail(c,
 		"Add I[0] I[1]\n"      // S<float>[0] = 3+4 = 7
 		"F2I S[0]\n"           // S<int>[0] = 7
 		"I2F S[0]\n"           // S<float>[1] = 7.0
 		"Add S[1] I[2]\n",     // S<float>[2] = 7.0 + 1.5 = 8.5
-		(DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+		prog);
 
 	VMM::InputT input(3);
 	input.GetData<float>()[0] = 3.0f;
@@ -230,12 +203,10 @@ protected:
 		static constexpr size_t DstMaxArity = 1;
 		static constexpr size_t SrcMaxArity = 2;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 1;
 	};
 
 	using VMF = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMF::Config>;
 	using ProgramT = VMF::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 
@@ -243,7 +214,7 @@ protected:
 
 	void SetUp() override
 	{
-		ASSERT_TRUE(vm.AddInstructions(g_edgeCaseOps));
+		ASSERT_TRUE(vm.AddInstructions(ScalarTestOps::kEdgeCaseOps));
 	}
 
 	DslCompilerT Compiler() const
@@ -257,8 +228,7 @@ TEST_F(ConstantSegmentTest, ConstantMultipleUses_SameValue)
 	// C[0] used in two operations, should have same value both times
 	auto c = Compiler();
 	VMF::ProgramT prog(8, 4);  // 4 constant slots
-	const auto res = c.Compile("Add I[0] C[0]\nMul S[0] C[0]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+	CompileOrFail(c, "Add I[0] C[0]\nMul S[0] C[0]\n", prog);
 
 	// Initialize constant
 	prog.GetConst<0>()[0] = 5.0f;
@@ -278,8 +248,7 @@ TEST_F(ConstantSegmentTest, ConstantZero_Handled)
 {
 	auto c = Compiler();
 	VMF::ProgramT prog(8, 2);
-	const auto res = c.Compile("Add I[0] C[0]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+	CompileOrFail(c, "Add I[0] C[0]\n", prog);
 
 	prog.GetConst<0>()[0] = 0.0f;
 
@@ -297,8 +266,7 @@ TEST_F(ConstantSegmentTest, ConstantNegative_PreservesSign)
 {
 	auto c = Compiler();
 	VMF::ProgramT prog(8, 2);
-	const auto res = c.Compile("Add I[0] C[0]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+	CompileOrFail(c, "Add I[0] C[0]\n", prog);
 
 	prog.GetConst<0>()[0] = -3.5f;
 
@@ -324,12 +292,10 @@ protected:
 		static constexpr size_t DstMaxArity = 1;
 		static constexpr size_t SrcMaxArity = 2;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 0;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 
@@ -337,7 +303,7 @@ protected:
 
 	void SetUp() override
 	{
-		ASSERT_TRUE(vm.AddInstructions(g_edgeCaseOps));
+		ASSERT_TRUE(vm.AddInstructions(ScalarTestOps::kEdgeCaseOps));
 	}
 
 	DslCompilerT Compiler() const
@@ -351,11 +317,10 @@ TEST_F(OptimizationEdgeTest, AllLiveInstructions_OptimizedMatchesFull)
 	// No dead code: every instruction result is used in final output
 	auto c = Compiler();
 	VMM::ProgramT prog(8, 0);
-	const auto res = c.Compile(
+	CompileOrFail(c,
 		"Add I[0] I[1]\n"
 		"Mul S[0] I[0]\n",
-		(DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+		prog);
 
 	VMM::InputT input(2);
 	input.GetData<float>()[0] = 2.0f;
@@ -377,8 +342,7 @@ TEST_F(OptimizationEdgeTest, SingleInstruction_OptimizesCorrectly)
 	// Minimal program: 1 instruction
 	auto c = Compiler();
 	VMM::ProgramT prog(8, 0);
-	const auto res = c.Compile("Add I[0] I[1]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+	CompileOrFail(c, "Add I[0] I[1]\n", prog);
 
 	VMM::InputT input(2);
 	input.GetData<float>()[0] = 5.0f;
@@ -398,13 +362,12 @@ TEST_F(OptimizationEdgeTest, LongDependencyChain_TracesCorrectly)
 	// All dependencies live
 	auto c = Compiler();
 	VMM::ProgramT prog(16, 0);
-	const auto res = c.Compile(
+	CompileOrFail(c,
 		"Add I[0] I[0]\n"      // S[0]
 		"Mul S[0] I[0]\n"      // S[1]
 		"Add S[1] I[0]\n"      // S[2]
 		"Mul S[2] I[0]\n",     // S[3]
-		(DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+		prog);
 
 	VMM::InputT input(1);
 	input.GetData<float>()[0] = 2.0f;
@@ -432,12 +395,10 @@ protected:
 		static constexpr size_t DstMaxArity = 1;
 		static constexpr size_t SrcMaxArity = 2;
 		static constexpr size_t MaxProgramSize = 64;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 0;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 
@@ -445,7 +406,7 @@ protected:
 
 	void SetUp() override
 	{
-		ASSERT_TRUE(vm.AddInstructions(g_edgeCaseOps));
+		ASSERT_TRUE(vm.AddInstructions(ScalarTestOps::kEdgeCaseOps));
 	}
 
 	DslCompilerT Compiler() const
@@ -465,8 +426,7 @@ TEST_F(StressTest, LargeProgram_16Instructions_ExecutesCorrectly)
 
 	auto c = Compiler();
 	VMM::ProgramT prog(32, 0);
-	const auto res = c.Compile(dsl, (DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+	CompileOrFail(c, dsl.c_str(), prog);
 
 	VMM::InputT input(2);
 	input.GetData<float>()[0] = 1.0f;
@@ -514,17 +474,15 @@ TEST_F(StressTest, ComplexMixedTypeProgram_RoundtripStable)
 class MinimalConfigTest : public GTestLite::Test
 {
 protected:
-	struct MinimalConfig
+	struct TestConfig
 	{
 		static constexpr size_t DstMaxArity = 1;
 		static constexpr size_t SrcMaxArity = 1;
 		static constexpr size_t MaxProgramSize = 8;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 0;
 	};
 
-	using VMS = MachineImpl<MinimalConfig, TypePack<float, int>, TypePack<>>;
-	using DslCompilerT = DslCompiler<MinimalConfig>;
+	using VMS = MachineImpl<TestConfig, TypePack<float, int>, TypePack<>>;
+	using DslCompilerT = DslCompiler<VMS::Config>;
 	using ProgramT = VMS::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 
@@ -532,7 +490,7 @@ protected:
 
 	void SetUp() override
 	{
-		ASSERT_TRUE(vm.AddInstructions(g_edgeCaseOps));
+		ASSERT_TRUE(vm.AddInstructions(ScalarTestOps::kEdgeCaseOps));
 	}
 
 	DslCompilerT Compiler() const
@@ -550,8 +508,7 @@ TEST_F(MinimalConfigTest, MinimalArity_1x1_ExecutesCorrectly)
 	VMS::ProgramT prog(4, 0);
 
 	// Sqrt is unary
-	const auto res = c.Compile("Sqrt I[0]\n", (DSLProgramT&)prog);
-	ASSERT_TRUE(res) << res.error().message;
+	CompileOrFail(c, "Sqrt I[0]\n", prog);
 
 	VMS::InputT input(1);
 	input.GetData<float>()[0] = 4.0f;

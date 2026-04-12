@@ -31,6 +31,9 @@
     <ClCompile Include="extended_tests.cpp">
       <Filter>test</Filter>
     </ClCompile>
+    <ClCompile Include="scalar_tests.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\gtest\GTestLite.h">
@@ -68,6 +71,15 @@
     </ClInclude>
     <ClInclude Include="..\examples\EigenOps.h">
       <Filter>examples</Filter>
+    </ClInclude>
+    <ClInclude Include="..\examples\ScalarOps.h">
+      <Filter>examples</Filter>
+    </ClInclude>
+    <ClInclude Include="ScalarTestOps.h">
+      <Filter>test</Filter>
+    </ClInclude>
+    <ClInclude Include="TestDslUtils.h">
+      <Filter>test</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

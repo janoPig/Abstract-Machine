@@ -20,7 +20,7 @@ namespace AbstractVM
 	constexpr size_t __DstMaxArity = _DST_MAX_ARITY;
 
 	template<typename Cfg>
-	concept VMConfig =
+	concept VMConfigSpec =
 		requires {
 		typename std::integral_constant<size_t, Cfg::SrcMaxArity>;
 		typename std::integral_constant<size_t, Cfg::DstMaxArity>;
@@ -57,14 +57,14 @@ namespace AbstractVM
 		}
 	};
 
-	template<VMConfig Cfg>
+	template<VMConfigSpec Cfg>
 	struct Instruction
 	{
 		uint32_t opcode;
 		Address src[Cfg::SrcMaxArity];
 	};
 
-	template<VMConfig Cfg>
+	template<VMConfigSpec Cfg>
 	constexpr static auto NopInstruction = Instruction<Cfg>{};
 
 	// Abstract operation base.
@@ -244,7 +244,7 @@ namespace AbstractVM
 		std::array<size_t, TypesCount> m_pointer{};
 	};
 
-	template<VMConfig Cfg>
+	template<VMConfigSpec Cfg>
 	class Program
 	{
 	public:
@@ -322,7 +322,7 @@ namespace AbstractVM
 		return (mode & RmOptimized) || (mode & RmValidate);
 	}
 
-	template<VMConfig Cfg>
+	template<VMConfigSpec Cfg>
 	class Processor
 	{
 		DISALLOW_COPY_MOVE_AND_ASSIGN(Processor);
@@ -411,7 +411,7 @@ namespace AbstractVM
 		const OpTable& m_opTable;
 	};
 
-	template<VMConfig Cfg>
+	template<VMConfigSpec Cfg>
 	class Machine
 	{
 		DISALLOW_COPY_MOVE_AND_ASSIGN(Machine);

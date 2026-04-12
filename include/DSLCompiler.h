@@ -18,7 +18,7 @@ namespace AbstractVM
 		std::string message;
 	};
 
-	template<VMConfig Cfg>
+	template<VMConfigSpec Cfg>
 	class DslCompiler
 	{
 	public:

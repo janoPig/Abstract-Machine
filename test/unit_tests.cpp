@@ -1,4 +1,5 @@
 #include "../gtest/GTestLite.h"
+#include "ScalarTestOps.h"
 #include "../include/OpImpl.h"
 #include "../include/AbstractVM.h"
 #include <vector>
@@ -52,24 +53,10 @@ TEST(ProgramTest, InstructionsWritable)
 	EXPECT_EQ(instrs[0].opcode, 1);
 }
 
-static void OpAdd(float& d, const float& a, const float& b) noexcept { d = a + b; }
-static void OpMul(float& d, const float& a, const float& b) noexcept { d = a * b; }
-static void OpF2I(int& d, const float& a)                   noexcept { d = static_cast<int>(a); }
-static void OpIAdd(int& d, const int& a, const int& b)      noexcept { d = a + b; }
-
-static constexpr OpDescriptor g_opLibrary[] =
-{
-	{ "Add",  &CreateOp<OpAdd> },
-	{ "Mul",  &CreateOp<OpMul> },
-	{ "F2I",  &CreateOp<OpF2I> },
-	{ "IAdd", &CreateOp<OpIAdd> },
-};
-
 TEST(OpImplTest, ExecuteSingleDst)
 {
-	std::set<const char*> sel = { "Add" };
 	MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>> vm("Test", 1);
-	vm.AddInstructions(g_opLibrary, &sel);
+	ASSERT_TRUE(vm.AddInstructions(ScalarTestOps::kBasicOps));
 
 	uint32_t addOpId{};
 	ASSERT_TRUE(vm.GetInstructionSet().Lookup("Add", addOpId));
@@ -93,13 +80,14 @@ struct E2EFixture
 	using MachineT = MachineImpl<TestConfig, Types, Types>;
 	using ProgramT = MachineT::ProgramT;
 
+	bool success{true};
 	MachineT vm{ "E2E" };
 	ProgramT prog{ 4 };
 	MachineT::InputT input{ 1 };
 
 	E2EFixture()
 	{
-		vm.AddInstructions(g_opLibrary);
+		success = vm.AddInstructions(ScalarTestOps::kBasicOps);
 
 		prog.GetConst<0>()[0] = 3.0f;
 		prog.GetConst<0>()[1] = 7.0f;
@@ -127,6 +115,7 @@ struct E2EFixture
 TEST(MachineTest, NormalRun)
 {
 	E2EFixture f;
+	ASSERT_TRUE(f.success);
 	f.vm.Run(f.prog, f.input, false);
 
 	const auto [pFloat, pInt] = f.vm.GetResult();
@@ -139,6 +128,7 @@ TEST(MachineTest, NormalRun)
 TEST(MachineTest, OptimizedRun_DeadCodeElimination)
 {
 	E2EFixture f;
+	ASSERT_TRUE(f.success);
 	f.vm.OptimizeProgram(f.prog);
 	f.vm.Run(f.prog, f.input, true);
 
@@ -152,6 +142,7 @@ TEST(MachineTest, OptimizedRun_DeadCodeElimination)
 TEST(MachineTest, MultipleRuns_ProduceConsistentResults)
 {
 	E2EFixture f;
+	ASSERT_TRUE(f.success);
 	for (int run = 0; run < 3; run++)
 	{
 		f.vm.Run(f.prog, f.input, false);

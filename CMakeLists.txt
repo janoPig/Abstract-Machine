@@ -60,6 +60,11 @@ add_executable(extended_tests
   test/extended_tests.cpp
   test/test.cpp
 )
+
+add_executable(scalar_tests
+  test/scalar_tests.cpp
+  test/test.cpp
+)
 target_link_libraries(eigen_test PRIVATE Eigen3::Eigen)
 
 enable_testing()
@@ -67,3 +72,4 @@ add_test(NAME UnitTests COMMAND unit_tests)
 add_test(NAME DslTests COMMAND dsl_tests)
 add_test(NAME EigenTests COMMAND eigen_test)
 add_test(NAME ExtendedTests COMMAND extended_tests)
+add_test(NAME ScalarTests COMMAND scalar_tests)

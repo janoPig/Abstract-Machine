@@ -137,8 +137,6 @@ struct MyConfig {
     static constexpr size_t SrcMaxArity   = 2;   // max inputs per instruction
     static constexpr size_t DstMaxArity   = 1;   // max outputs per instruction
     static constexpr size_t MaxProgramSize = 64;  // fixed instruction slot count
-    static constexpr size_t TypesCount    = 2;   // must equal sizeof...(Ts)
-    static constexpr size_t ConstTypesCount = 2; // ≤ TypesCount, 0 = no constants
 };
 ```
 

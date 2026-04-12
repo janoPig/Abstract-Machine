@@ -1,69 +1,15 @@
 #include "../gtest/GTestLite.h"
+#include "ScalarTestOps.h"
+#include "TestDslUtils.h"
 #include "../include/DSLCompiler.h"
 #include "../include/AbstractVM.h"
 #include "../include/OpImpl.h"
 
 using namespace AbstractVM;
 
-// =============================================================================
-// Op library — float arithmetic
-// =============================================================================
-
-static void OpFAdd(float& d, const float& a, const float& b) noexcept { d = a + b; }
-static void OpFSub(float& d, const float& a, const float& b) noexcept { d = a - b; }
-static void OpFMul(float& d, const float& a, const float& b) noexcept { d = a * b; }
-static void OpFNeg(float& d, const float& a)                 noexcept { d = -a; }
-
-// Op library — int arithmetic
-static void OpIAdd(int& d, const int& a, const int& b) noexcept { d = a + b; }
-static void OpIMul(int& d, const int& a, const int& b) noexcept { d = a * b; }
-
-// Op library — cross-type
-static void OpF2I(int& d, const float& a)   noexcept { d = static_cast<int>(a); }
-static void OpI2F(float& d, const int& a)   noexcept { d = static_cast<float>(a); }
-static void OpFAddI(float& d, const float& a, const int& b) noexcept { d = a + static_cast<float>(b); }
-
-// Op library — multi-dst (DstCount=2): splits float into (floor int, frac float)
-static void OpFSplitIntFrac(int& dInt, float& dFrac, const float& a) noexcept
-{
-	dInt  = static_cast<int>(a);
-	dFrac = a - static_cast<float>(dInt);
-}
-
-// Validator: denominator must be non-zero
-static bool ValFDivCheck(const float& /*d*/, const float& /*a*/, const float& b) noexcept
-{
-	return b != 0.0f;
-}
-static void OpFDiv(float& d, const float& a, const float& b) noexcept { d = a / b; }
-
-// =============================================================================
-// Op descriptor tables — one per library
-// =============================================================================
-
-static constexpr OpDescriptor g_floatOps[] =
-{
-	{ "Add",  &CreateOp<OpFAdd>                          },
-	{ "Sub",  &CreateOp<OpFSub>                          },
-	{ "Mul",  &CreateOp<OpFMul>                          },
-	{ "Neg",  &CreateOp<OpFNeg>                          },
-	{ "Div",  &CreateOp<OpFDiv, ValFDivCheck>            },
-};
-
-static constexpr OpDescriptor g_intOps[] =
-{
-	{ "Add",  &CreateOp<OpIAdd> },
-	{ "Mul",  &CreateOp<OpIMul> },
-};
-
-static constexpr OpDescriptor g_mixedOps[] =
-{
-	{ "F2I",      &CreateOp<OpF2I>                              },
-	{ "I2F",      &CreateOp<OpI2F>                              },
-	{ "FAddI",    &CreateOp<OpFAddI>                            },
-	// DstCount=2: first two params are dst, rest are src
-	{ "SplitIntFrac", &CreateOp<OpFSplitIntFrac, nullptr, 2>   },
-};
+static constexpr auto& g_floatOps = ScalarTestOps::kFloatOps;
+static constexpr auto& g_intOps = ScalarTestOps::kIntOps;
+static constexpr auto& g_mixedOps = ScalarTestOps::kMixedOps;
 
 // =============================================================================
 // Shared type register — float=0, int=1
@@ -71,44 +17,19 @@ static constexpr OpDescriptor g_mixedOps[] =
 
 static TypeRegisterT<float, int> g_reg;
 
-
-template<VMConfig Cfg>
-static bool AssertRoundtrip(const DslCompiler<Cfg>& c, const char* dsl)
+template<typename CompilerT, typename ProgramT>
+static void CompileOrFail(const CompilerT& compiler, const char* dsl, ProgramT& program)
 {
-	using ProgramT = Program<Cfg>;
-	ProgramT p1{};
-	auto r1 = c.Compile(dsl, p1);
-	if (!r1)
-	{
-		std::cout << r1.error().message;
-		return false;
-	}
-
-	auto d1 = c.Decompile(p1);
-	if (!d1.has_value())
-	{
-		return false;
-	}
-
-	ProgramT p2{};
-	auto r2 = c.Compile(*d1, p2);
-	if (!r2)
-	{
-		std::cout << r2.error().message;
-		return false;
-	}
-
-	auto d2 = c.Decompile(p2);
-	if (!d2.has_value())
-	{
-		return false;
-	}
-	if (*d1 != *d2)
-	{
-		return false;
-	}
-	return true;
+	TestDslUtils::CompileOrFail(compiler, dsl, program);
 }
+
+template<VMConfigSpec Cfg>
+static void AssertRoundtrip(const DslCompiler<Cfg>& compiler, const char* dsl)
+{
+	TestDslUtils::AssertRoundtrip(compiler, dsl);
+}
+
+
 
 // =============================================================================
 // SECTION 1 — Single-type float VM: compile / decompile / execute basics
@@ -122,20 +43,12 @@ protected:
 		static constexpr size_t DstMaxArity = 3;
 		static constexpr size_t SrcMaxArity = 3;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 1;
-		static constexpr size_t ConstTypesCount = 1;
 	};
 
 	using VMF = MachineImpl<TestConfig, TypePack<float>, TypePack<float>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMF::Config>;
 	using ProgramT = VMF::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
-
-	void CompileOrFail(const DslCompilerT& c, const char* dsl, ProgramT& prog)
-	{
-		auto res = c.Compile(dsl, (DSLProgramT&)prog);
-		ASSERT_TRUE(res) << res.error().message;
-	}
 
 	VMF vm{ "Float", 16 };
 
@@ -216,11 +129,11 @@ TEST_F(FloatVmTest, Decompile_StackSrc_ExactFormat)
 TEST_F(FloatVmTest, Roundtrip_ChainOfOps)
 {
 	auto c = Compiler();
-	EXPECT_TRUE(AssertRoundtrip(c,
+	AssertRoundtrip(c,
 		"Add I[0] I[1]\n"
 		"Mul S[0] C[0]\n"
 		"Sub S[1] I[2]\n"
-		));
+		);
 }
 
 TEST_F(FloatVmTest, Execute_AddThenMul)
@@ -315,12 +228,10 @@ protected:
 		static constexpr size_t DstMaxArity = 3;
 		static constexpr size_t SrcMaxArity = 3;
 		static constexpr size_t MaxProgramSize = 2;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 2;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>>;      // multi-type float+int
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 
@@ -431,23 +342,15 @@ protected:
 		static constexpr size_t DstMaxArity = 3;
 		static constexpr size_t SrcMaxArity = 3;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 2;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>>;      // multi-type float+int
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 	// =============================================================================
 	// Helper: compile DSL into a fresh ProgramImpl, assert success
 	// =============================================================================
-	void CompileOrFail(const DslCompilerT& c, const char* dsl, ProgramT& prog)
-	{
-		auto res = c.Compile(dsl, (DSLProgramT&)prog);
-		ASSERT_TRUE(res) << res.error().message;
-	}
-
 	VMM vm{ "Multi", 16 };
 
 	void SetUp() override
@@ -562,11 +465,11 @@ TEST_F(MultiTypeTest, Decompile_MultiType_CorrectTypeAnnotations)
 TEST_F(MultiTypeTest, Roundtrip_MultiType_ChainWithConversions)
 {
 	auto c = Compiler();
-	EXPECT_TRUE(AssertRoundtrip(c,
+	AssertRoundtrip(c,
 		"Add I[0] I[1]\n"
 		"X.F2I S[0]\n"
 		"Int.Add S[0] I[0]\n"
-		));
+		);
 }
 
 TEST_F(MultiTypeTest, TypeAnnotation_LhsCorrectType_Accepted)
@@ -596,20 +499,12 @@ protected:
 		static constexpr size_t DstMaxArity = 3;
 		static constexpr size_t SrcMaxArity = 3;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 2;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>>;      // multi-type float+int
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
-
-	void CompileOrFail(const DslCompilerT& c, const char* dsl, ProgramT& prog)
-	{
-		auto res = c.Compile(dsl, (DSLProgramT&)prog);
-		ASSERT_TRUE(res) << res.error().message;
-	}
 
 	VMM vm{ "MultiDst", 16 };
 
@@ -694,20 +589,13 @@ protected:
 		static constexpr size_t DstMaxArity = 3;
 		static constexpr size_t SrcMaxArity = 3;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 2;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 
-	void CompileOrFail(const DslCompilerT& c, const char* dsl, ProgramT& prog)
-	{
-		auto res = c.Compile(dsl, (DSLProgramT&)prog);
-		ASSERT_TRUE(res) << res.error().message;
-	}
 	// Two independent single-type ISets merged into one compound set.
 	InstructionSet  m_floatIset{ "Float" };
 	InstructionSet  m_intIset{ "Int" };
@@ -792,7 +680,7 @@ TEST_F(CompoundISetTest, Roundtrip_PrefixedCompound_Stable)
 	ASSERT_TRUE(vm2.AddInstructions(g_intOps,   nullptr, "Int"));
 
 	DslCompilerT c(vm2.GetInstructionSet(), vm2.GetTypeReg());
-	EXPECT_TRUE(AssertRoundtrip(c, "Float.Add I[0] I[1]\nInt.Mul I[0] I[1]\n"));
+	AssertRoundtrip(c, "Float.Add I[0] I[1]\nInt.Mul I[0] I[1]\n");
 }
 
 // =============================================================================
@@ -807,20 +695,12 @@ protected:
 		static constexpr size_t DstMaxArity = 3;
 		static constexpr size_t SrcMaxArity = 3;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 2;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
-
-	void CompileOrFail(const DslCompilerT& c, const char* dsl, ProgramT& prog)
-	{
-		auto res = c.Compile(dsl, (DSLProgramT&)prog);
-		ASSERT_TRUE(res) << res.error().message;
-	}
 
 	VMM vm{ "Opt", 16 };
 
@@ -901,12 +781,10 @@ protected:
 		static constexpr size_t DstMaxArity = 3;
 		static constexpr size_t SrcMaxArity = 3;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 2;
-		static constexpr size_t ConstTypesCount = 2;
 	};
 
 	using VMM = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>>;
-	using DslCompilerT = DslCompiler<TestConfig>;
+	using DslCompilerT = DslCompiler<VMM::Config>;
 	using ProgramT = VMM::ProgramT;
 	using DSLProgramT = DslCompilerT::ProgramT;
 

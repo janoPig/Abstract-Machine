@@ -1,5 +1,6 @@
 #include "../gtest/GTestLite.h"
 #include "../examples/EigenOps.h"
+#include "TestDslUtils.h"
 #include "../include/DSLCompiler.h"
 
 using namespace EigenOps;
@@ -247,8 +248,6 @@ class MachineIntegrationTest : public ::GTestLite::Test
 		static constexpr size_t DstMaxArity = 1;
 		static constexpr size_t SrcMaxArity = 2;
 		static constexpr size_t MaxProgramSize = 32;
-		static constexpr size_t TypesCount = 3;
-		static constexpr size_t ConstTypesCount = 0;
 	};
 protected:
 	using MachineT = MachineImpl<TestConfig, TypePack<EMatF, EVecF, float>>;
@@ -257,7 +256,7 @@ protected:
 	void SetUp() override
 	{
 		ASSERT_TRUE(RegisterAllOps<float>(vm.GetInstructionSet(), vm.GetTypeReg()));
-		compiler = new DslCompiler<TestConfig>(vm.GetInstructionSet(), g_reg);
+		compiler = new DslCompiler<MachineT::Config>(vm.GetInstructionSet(), g_reg);
 	}
 
 	void TearDown() override
@@ -273,13 +272,13 @@ protected:
 	ProgramT* MakeProgram(const char* dsl)
 	{
 		auto* prog = new ProgramT(16, 100);
-		ASSERT_TRUE(compiler->Compile(dsl, *(Program<TestConfig> *)prog));
+		TestDslUtils::CompileOrFail(*compiler, dsl, *prog);
 		return prog;
 	}
 
 	InstructionSet iset{};
 	MachineT vm{ "LinAlg", 100 };
-	DslCompiler<TestConfig>* compiler = nullptr;
+	DslCompiler<MachineT::Config>* compiler = nullptr;
 	ProgramT* program = nullptr;
 };
 

@@ -7,6 +7,26 @@
 
 namespace AbstractVM
 {
+	template<typename Cfg>
+	concept VMConfig =
+		requires {
+		typename std::integral_constant<size_t, Cfg::SrcMaxArity>;
+		typename std::integral_constant<size_t, Cfg::DstMaxArity>;
+		typename std::integral_constant<size_t, Cfg::MaxProgramSize>;
+	}
+	&& (Cfg::SrcMaxArity > 0 && Cfg::SrcMaxArity <= __SrcMaxArity)
+		&& (Cfg::DstMaxArity > 0 && Cfg::DstMaxArity <= __DstMaxArity);
+
+	template<typename BaseCfg, typename Types, typename ConstTypes>
+	struct VMConfigImpl;
+
+	template<typename BaseCfg, typename... Ts, typename... Cs>
+	struct VMConfigImpl<BaseCfg, TypePack<Ts...>, TypePack<Cs...>> : BaseCfg
+	{
+		static constexpr size_t TypesCount = sizeof...(Ts);
+		static constexpr size_t ConstTypesCount = sizeof...(Cs);
+	};
+
 	// Base class for objects that support dynamic size
 	class VectorLike
 	{
@@ -111,11 +131,10 @@ namespace AbstractVM
 	class ProgramImpl;
 
 	template<VMConfig Cfg, typename... Ts, typename... Cs>
-	class ProgramImpl<Cfg, TypePack<Ts...>, TypePack<Cs...>> : private Program<Cfg>
+	class ProgramImpl<Cfg, TypePack<Ts...>, TypePack<Cs...>> : private Program<VMConfigImpl<Cfg, TypePack<Ts...>, TypePack<Cs...>>>
 	{
-		static_assert(Cfg::TypesCount == sizeof...(Ts));
-		static_assert(Cfg::ConstTypesCount == sizeof...(Cs));
-		using Base = Program<Cfg>;
+		using Config = VMConfigImpl<Cfg, TypePack<Ts...>, TypePack<Cs...>>;
+		using Base = Program<Config>;
 
 	public:
 		static constexpr auto TypesCount = sizeof...(Ts);
@@ -168,7 +187,7 @@ namespace AbstractVM
 		}
 	};
 
-	template<VMConfig Cfg, typename... Ts>
+	template<VMConfigSpec Cfg, typename... Ts>
 	class StackImpl : private Stack<sizeof...(Ts)>
 	{
 		DISALLOW_COPY_MOVE_AND_ASSIGN(StackImpl);
@@ -203,26 +222,27 @@ namespace AbstractVM
 	class MachineImpl;
 
 	template<VMConfig Cfg, typename... Ts, typename...Cs>
-	class MachineImpl<Cfg, TypePack<Ts...>, TypePack<Cs...>> : private MachineImplBase<Ts...>, private Machine<Cfg>
+	class MachineImpl<Cfg, TypePack<Ts...>, TypePack<Cs...>> : private MachineImplBase<Ts...>, private Machine<VMConfigImpl<Cfg, TypePack<Ts...>, TypePack<Cs...>>>
 	{
-		static_assert(Cfg::TypesCount == sizeof...(Ts));
-		static_assert(Cfg::ConstTypesCount == sizeof...(Cs));
 		DISALLOW_COPY_MOVE_AND_ASSIGN(MachineImpl);
 
+	public:
+		using Config = VMConfigImpl<Cfg, TypePack<Ts...>, TypePack<Cs...>>;
 		using Types = TypePack<Ts...>;
 		using ConstTypes = TypePack<Cs...>;
 		using Base = MachineImplBase<Ts...>;
-		using Machine<Cfg>::GetStack;
-
-	public:
-		using ProgramT = ProgramImpl<Cfg, Types, ConstTypes>;
+		using MachineBase = Machine<Config>;
+		using Machine<Config>::GetStack;
+		using BaseProgramT = Program<Config>;
+		using ProgramT = ProgramImpl<Config, Types, ConstTypes>;
 		using InputT = DataSegmentImpl<Types>;
-		using StackT = StackImpl<Cfg, Ts...>;
+		using StackT = StackImpl<Config, Ts...>;
+		using BaseSegmentT = Segment<Config::TypesCount>;
 		using ResultT = std::tuple<const Ts* RESTRICT...>;
 
 		explicit MachineImpl(const char* name, size_t vectorCapacity = 1)
 			: Base(name)
-			, Machine<Cfg>(Base::iset)
+			, MachineBase(Base::iset)
 		{
 			InitStack(vectorCapacity);
 		}
@@ -257,17 +277,17 @@ namespace AbstractVM
 
 		void OptimizeProgram(const ProgramT& program)
 		{
-			Machine<Cfg>::OptimizeProgram((const Program<Cfg> &)program);
+			MachineBase::OptimizeProgram((const BaseProgramT &)program);
 		}
 
 		void Run(const ProgramT& program, const InputT& input, bool optimized = false)
 		{
-			Machine<Cfg>::Run((const Program<Cfg>&)program, (const Segment<Cfg::TypesCount>&)input, optimized);
+			MachineBase::Run((const BaseProgramT&)program, (const BaseSegmentT&)input, optimized);
 		}
 
 		bool Validate(const ProgramT& program, const InputT& input, bool optimized = false)
 		{
-			return Machine<Cfg>::Validate((const Program<Cfg>&)program, (const Segment<Cfg::TypesCount>&)input, optimized);
+			return MachineBase::Validate((const BaseProgramT&)program, (const BaseSegmentT&)input, optimized);
 		}
 
 		// Returns typed pointers to the top of each stack segment.
@@ -281,7 +301,7 @@ namespace AbstractVM
 		FORCE_INLINE void GetResult(ResultT& result)
 		{
 			std::array<uint8_t*, sizeof...(Ts)> ptrs{};
-			Machine<Cfg>::GetResult(ptrs);
+			MachineBase::GetResult(ptrs);
 
 			[&] <size_t... Is>(std::index_sequence<Is...>)
 			{
@@ -292,7 +312,6 @@ namespace AbstractVM
 	private:
 		void InitStack(size_t vectorCapacity = 1)
 		{
-			//((StackT&)GetStack()).Destroy();
 			const auto maxObjs = GetStack().Capacity();
 			((StackT&)GetStack()).Init(maxObjs, vectorCapacity);
 		}
