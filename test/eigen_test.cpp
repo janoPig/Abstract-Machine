@@ -401,3 +401,141 @@ TEST_F(MachineIntegrationTest, DeadCodeElimination_OptimizedMatchesFull)
 
 	EXPECT_EQ(full, *opt);
 }
+
+TEST_F(MachineIntegrationTest, NeuralNetwork_ForwardPass)
+{
+	// 2-layer MLP Forward Pass:
+	// S[0] = X * W1
+	// S[1] = S[0] + B1
+	// S[2] = MatReluF S[1]
+	// S[3] = S[2] * W2
+	// S[4] = S[3] + B2
+	// S[5] = MatSigmoidF S[4]
+	program = MakeProgram(
+		"S[0] = MatMulF I[0] I[1]\n"
+		"S[1] = MatAddF S[0] I[2]\n"
+		"S[2] = MatReluF S[1]\n"
+		"S[3] = MatMulF S[2] I[3]\n"
+		"S[4] = MatAddF S[3] I[4]\n"
+		"S[5] = MatSigmoidF S[4]\n"
+	);
+
+	MachineT::InputT input(5, 100);
+	
+	// X: 1x2 input
+	fill(input.GetData<EMatF>()[0], 1, 2, 0.5f, -0.2f);
+	// W1: 2x3 weights
+	fill(input.GetData<EMatF>()[1], 2, 3, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f);
+	// B1: 1x3 bias
+	fill(input.GetData<EMatF>()[2], 1, 3, 0.1f, 0.1f, 0.1f);
+	// W2: 3x1 weights
+	fill(input.GetData<EMatF>()[3], 3, 1, 0.7f, 0.8f, 0.9f);
+	// B2: 1x1 bias
+	fill(input.GetData<EMatF>()[4], 1, 1, -0.5f);
+
+	vm.Run(*program, input);
+
+	const auto res = vm.GetResult();
+	const EMatF* r = std::get<0>(res);
+	ASSERT_TRUE(r != nullptr);
+	ASSERT_EQ(r->rows(), 1);
+	ASSERT_EQ(r->cols(), 1);
+
+	// Manual verification:
+	// X*W1 = [0.5*0.1 + -0.2*0.4, 0.5*0.2 + -0.2*0.5, 0.5*0.3 + -0.2*0.6]
+	//      = [0.05 - 0.08, 0.1 - 0.1, 0.15 - 0.12] = [-0.03, 0.0, 0.03]
+	// +B1  = [0.07, 0.1, 0.13]
+	// Relu = [0.07, 0.1, 0.13]
+	// *W2  = [0.07*0.7 + 0.1*0.8 + 0.13*0.9] = [0.049 + 0.08 + 0.117] = [0.246]
+	// +B2  = [0.246 - 0.5] = [-0.254]
+	// Sigm = 1 / (1 + exp(0.254)) approx 0.4368
+	
+	EXPECT_NEAR(r->view()(0,0), 0.4368f, 1e-4f);
+}
+
+TEST_F(MachineIntegrationTest, LinearRegression_NormalEquation)
+{
+	// Normal Equation: theta = (X^T * X)^-1 * X^T * y
+	// S[0] = X^T
+	// S[1] = S[0] * X
+	// S[2] = MatInverseF S[1]
+	// S[3] = S[2] * S[0]
+	// S[4] = S[3] * y
+	program = MakeProgram(
+		"S[0] = MatTransposeF I[0]\n"
+		"S[1] = MatMulF S[0] I[0]\n"
+		"S[2] = MatInverseF S[1]\n"
+		"S[3] = MatMulF S[2] S[0]\n"
+		"S[4] = MatMulF S[3] I[1]\n"
+	);
+
+	MachineT::InputT input(2, 100);
+	
+	// X: 3x2 matrix (3 samples, 2 features including bias column)
+	// [[1, 1], [1, 2], [1, 3]]
+	fill(input.GetData<EMatF>()[0], 3, 2, 1.0f, 1.0f, 1.0f, 2.0f, 1.0f, 3.0f);
+	
+	// y: 3x1 vector
+	// [2, 4, 6]  (y = 2*x)
+	fill(input.GetData<EMatF>()[1], 3, 1, 2.0f, 4.0f, 6.0f);
+
+	vm.Run(*program, input);
+
+	const auto res = vm.GetResult();
+	const EMatF* r = std::get<0>(res);
+	ASSERT_TRUE(r != nullptr);
+	
+	// Expected theta: [0, 2] (y = 0*1 + 2*x)
+	EXPECT_NEAR(r->view()(0,0), 0.0f, 1e-4f);
+	EXPECT_NEAR(r->view()(1,0), 2.0f, 1e-4f);
+}
+
+TEST_F(MachineIntegrationTest, SelfAttention_ForwardPass)
+{
+	// Self-Attention (Transformer Block) Forward Pass:
+	// Q = X * Wq, K = X * Wk, V = X * Wv
+	// Scores = (Q * K^T) * scale
+	// Weights = Softmax(Scores)
+	// Output = Weights * V
+	program = MakeProgram(
+		"S[0] = MatMulF I[0] I[1]\n"       // Q = X * Wq
+		"S[1] = MatMulF I[0] I[2]\n"       // K = X * Wk
+		"S[2] = MatMulF I[0] I[3]\n"       // V = X * Wv
+		"S[3] = MatTransposeF S[1]\n"      // K^T
+		"S[4] = MatMulF S[0] S[3]\n"       // Q * K^T
+		"S[5] = MatMulScalarF S[4] C[0]\n" // Scaled = Scores * (1/sqrt(dk))
+		"S[6] = MatSoftmaxF S[5]\n"        // Weights = Softmax(Scaled)
+		"S[7] = MatMulF S[6] S[2]\n"       // Output = Weights * V
+	);
+
+	MachineT::InputT input(4, 100);
+	
+	// X: 2x2 input (SeqLen=2, Dim=2)
+	fill(input.GetData<EMatF>()[0], 2, 2, 1.0f, 0.0f, 0.0f, 1.0f); // Identity input
+	// Wq, Wk, Wv: 2x2 weights (Dim=2, Dim=2)
+	fill(input.GetData<EMatF>()[1], 2, 2, 1.0f, 0.0f, 0.0f, 1.0f); // Wq = I
+	fill(input.GetData<EMatF>()[2], 2, 2, 0.0f, 1.0f, 1.0f, 0.0f); // Wk = Swap
+	fill(input.GetData<EMatF>()[3], 2, 2, 0.5f, 0.5f, 0.5f, 0.5f); // Wv = Const
+
+	// Scale factor (1/sqrt(dk)): dk=2 => 1/sqrt(2) approx 0.7071
+	program->GetConst<2>()[0] = 0.7071f;
+
+	vm.Run(*program, input);
+
+	const auto res = vm.GetResult();
+	const EMatF* r = std::get<0>(res);
+	ASSERT_TRUE(r != nullptr);
+	
+	// Manual trace:
+	// Q = X*Wq = I, K = X*Wk = [[0,1],[1,0]], V = X*Wv = [[0.5,0.5],[0.5,0.5]]
+	// Q * K^T = I * [[0,1],[1,0]] = [[0,1],[1,0]]
+	// Scaled = [[0, 0.7071], [0.7071, 0]]
+	// Softmax rows:
+	// Row0: exp(0), exp(0.7071) => 1, 2.028 => sums=3.028 => [0.330, 0.670]
+	// Row1: exp(0.7071), exp(0) => 2.028, 1 => sums=3.028 => [0.670, 0.330]
+	// Output = [[0.33, 0.67], [0.67, 0.33]] * [[0.5,0.5],[0.5,0.5]]
+	//        = [[0.5, 0.5], [0.5, 0.5]]
+	
+	EXPECT_NEAR(r->view()(0,0), 0.5f, 1e-4f);
+	EXPECT_NEAR(r->view()(1,1), 0.5f, 1e-4f);
+}

@@ -1,7 +1,7 @@
 # [WIP] Abstract Virtual Machine (AVM)
 
 > [!WARNING]
-> This project is a **prototype under construction**. Architectural details are subject to change, and the current version is optimized for development flexibility and evaluation.
+> This project is a **prototype under construction**. Architectural details are subject to change.
 
 A lightweight, header-only, embeddable virtual machine for executing statically-typed instruction programs in C++20.
 
@@ -13,20 +13,7 @@ A lightweight, header-only, embeddable virtual machine for executing statically-
 - **Strongly typed** — all operand types are resolved at compile time via `TypePack<Ts...>`
 - **Zero RTTI** — type identity uses unique static addresses, no `typeid` or `std::type_index`
 - **Multiple execution modes** — full, validated, optimized (dead-code elimination)
-- **Text DSL** — compile/decompile programs from/to a human-readable instruction format
-- **Extensible** — define custom ops as plain C++ functions; `CreateOp<Fn>` wraps them automatically
-- **Example implementation** — `EigenOps` provides a example of linear algebra instruction set via [Eigen 5.0](https://eigen.tuxfamily.org)
-
----
-
-## Requirements
-
-| Requirement | Version |
-|---|---|
-| C++ Standard | C++20 |
-| CMake | ≥ 3.25 |
-| Compiler | MSVC 19.3+, GCC 13+, Clang 16+ |
-| Optional dependency | Eigen 5.0 (for `EigenOps`) |
+- **Text DSL** — compile/decompile programs from/to a human-readable format
 
 ---
 
@@ -63,6 +50,8 @@ A lightweight, header-only, embeddable virtual machine for executing statically-
                                               └────────────┘└────────────┘
 ```
 
+---
+
 ## Memory Model
 
 Every `SegmentImpl` maintains **one heap-allocated typed array per type** in the `TypePack`. Three segment kinds are used at runtime:
@@ -88,15 +77,28 @@ Addresses are encoded as `Segment<Type>[Offset]`:
 * `C<T>[n]`: Constant segment (Read-only data baked into the program).
 * `S<T>[n]`: Stack segment (Read-write temporary storage).
 
-### Example Script
+### Complex Example: Self-Attention (Transformer)
+The following script demonstrates a functional **Self-Attention** forward pass using the `EigenOps` example backend.
+
 ```text
-# Matrix multiplication of input and constant, stored on stack
-MatMulF S<EMatF>[0] I<EMatF>[0] C<EMatF>[0]
+# Step 1: Project input X to Query, Key, and Value matrices
+# X: [SeqLen x Dim], Wq/Wk/Wv: [Dim x Dim]
+S<EMatF>[0] = MatMulF I<EMatF>[0] I<EMatF>[1]    # Q = X * Wq
+S<EMatF>[1] = MatMulF I<EMatF>[0] I<EMatF>[2]    # K = X * Wk
+S<EMatF>[2] = MatMulF I<EMatF>[0] I<EMatF>[3]    # V = X * Wv
 
-# Add another matrix from input to the result
-MatAddF S<EMatF>[1] S<EMatF>[0] I<EMatF>[1]
+# Step 2: Calculate Attention Scores (Q * K^T)
+S<EMatF>[3] = MatTransposeF S<EMatF>[1]          # K^T
+S<EMatF>[4] = MatMulF S<EMatF>[0] S<EMatF>[3]    # Scores = Q * K^T
 
-# Final result is stored in S<EMatF>[1]
+# Step 3: Scale scores by 1/sqrt(dk)
+S<EMatF>[5] = MatMulScalarF S<EMatF>[4] C<float>[0]
+
+# Step 4: Apply Softmax to get Attention Weights
+S<EMatF>[6] = MatSoftmaxF S<EMatF>[5]            # Weights = Softmax(Scaled)
+
+# Step 5: Final weighted sum (Weights * V)
+S<EMatF>[7] = MatMulF S<EMatF>[6] S<EMatF>[2]    # Output [SeqLen x Dim]
 ```
 
 ---
@@ -124,7 +126,7 @@ inline TypeToken GetTypeToken() noexcept {
 }
 ```
 
-Custom types can expose a `static constexpr const char* TypeName` for use in DSL diagnostics. Some primitives (`float`, `int`, `double`, `size_t`) are pre-registered (TBD).
+Custom types can expose a `static constexpr const char* TypeName` for use in DSL diagnostics.
 
 ---
 
@@ -134,9 +136,9 @@ Each machine is parameterized by a `VMConfig` struct:
 
 ```cpp
 struct MyConfig {
-    static constexpr size_t SrcMaxArity   = 2;   // max inputs per instruction
-    static constexpr size_t DstMaxArity   = 1;   // max outputs per instruction
-    static constexpr size_t MaxProgramSize = 64;  // fixed instruction slot count
+    static constexpr size_t SrcMaxArity   = 4;   // max inputs per instruction
+    static constexpr size_t DstMaxArity   = 2;   // max outputs per instruction
+    static constexpr size_t MaxProgramSize = 128; // fixed instruction slot count
 };
 ```
 
@@ -155,8 +157,8 @@ static void OpAdd(float& dst, const float& a, const float& b) noexcept {
 }
 
 // Optional validation function — same signature, returns bool
-static bool ValAdd(const float&, const float&, const float&) noexcept {
-    return true;
+static bool ValAdd(const float&, const float&, const float& b) noexcept {
+    return b != 0;
 }
 ```
 
@@ -172,7 +174,7 @@ static constexpr OpDescriptor g_ops[] = {
 vm.AddInstructions(g_ops);
 ```
 
-`OpImpl` uses `FuncTraits` to deduce argument counts and types automatically — no manual registration of arity or type indices.
+`OpImpl` uses `FuncTraits` to deduce argument counts and types automatically.
 
 ---
 
@@ -184,7 +186,6 @@ vm.AddInstructions(g_ops);
 | `RmFull \| RmAnalyze` | Record the producer instruction index for every stack slot (used by the optimizer) |
 | `RmOptimized` | Skip instructions not marked as live by `OptimizeProgram()` |
 | `RmValidate` | Call `Op::Validate()` instead of `Op::Execute()`; returns `false` on first failure |
-| `RmOptimized \| RmValidate` | Combined optimized + validated pass |
 
 ```cpp
 vm.Run(prog, input);                    // RmFull
@@ -197,24 +198,19 @@ The optimizer performs a backward **dead-code elimination** pass: starting from 
 
 ---
 
-## Example EigenOps — Linear Algebra Backend
+## Example Backends
 
-`examples/EigenOps.h` provides a ready-to-use instruction set built on [Eigen 5.0](https://eigen.tuxfamily.org). It defines `EMat<T>` (matrix) and `EVec<T>` (column vector) as `VectorLike` types that pre-allocate capacity at machine init time — no per-instruction heap allocation during execution.
+The repository includes sample instruction sets to demonstrate extensibility. These are reference implementations and not part of the core VM logic.
 
-**Type aliases:** `EMatF`, `EMatD`, `EMatI32`, `EVecF`, `EVecD`, …
+### EigenOps (Linear Algebra)
+Built on [Eigen 5.0](https://eigen.tuxfamily.org). Provides high-performance matrix and vector operations (`EMat<T>`, `EVec<T>`) including BLAS, decompositions, and ML activations (ReLU, Sigmoid, Softmax).
 
-**Supported scalar element types:** `float`, `double`, `int32_t`, `int64_t`, `uint32_t`, `uint64_t`, `BitVector` (64-bit packed).
+Register all ops: `RegisterAllOps<float>(iset, reg);`
 
-**Instruction categories:**
+### ScalarOps (Primitive Arithmetic)
+Standard operations for `float`, `double`, `int32`, `int64`, and `uint64`. Covers full `<cmath>` library and bitwise logic.
 
-| Category | Examples |
-|---|---|
-| Linear algebra | `MatMulF`, `MatVecMulF`, `MatTransposeF`, `MatInverseF`, `MatDetF`, `MatQRF` |
-| Arithmetic | `MatAddF`, `VecSubF`, `MatElemMulF`, `VecDotF`, `MatMulScalarF` |
-| Activation / math | `MatReluF`, `VecAbsF`, `MatSinF`, `VecExpF`, `MatSqrtF` |
-| Bitwise (integer) | `MatBitAndI32`, `VecBitOrU64`, `MatBitXorI64` |
-
-Register ops with `RegisterAllOps<float, int32_t>(iset, reg)`.
+Register ops: `RegisterScalarOps<float, int32_t>(iset, reg);`
 
 ---
 

@@ -36,9 +36,10 @@ namespace AbstractVM
 	};
 
 	template<> struct TypeNameTrait<float> { static constexpr const char* Get() { return "float"; } };
-	template<> struct TypeNameTrait<int> { static constexpr const char* Get() { return "int"; } };
 	template<> struct TypeNameTrait<double> { static constexpr const char* Get() { return "double"; } };
-	template<> struct TypeNameTrait<size_t> { static constexpr const char* Get() { return "size_t"; } };
+	template<> struct TypeNameTrait<int32_t> { static constexpr const char* Get() { return "int"; } };
+	template<> struct TypeNameTrait<int64_t> { static constexpr const char* Get() { return "int64"; } };
+	template<> struct TypeNameTrait<uint64_t> { static constexpr const char* Get() { return "uint64"; } };
 
 	struct RegTypeInfo
 	{
