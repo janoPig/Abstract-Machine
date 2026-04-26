@@ -13,6 +13,7 @@ namespace AbstractVM
 		typename std::integral_constant<size_t, Cfg::SrcMaxArity>;
 		typename std::integral_constant<size_t, Cfg::DstMaxArity>;
 		typename std::integral_constant<size_t, Cfg::MaxProgramSize>;
+		typename std::integral_constant<size_t, Cfg::MaxConstantsCount>;
 	}
 	&& (Cfg::SrcMaxArity > 0 && Cfg::SrcMaxArity <= __SrcMaxArity)
 		&& (Cfg::DstMaxArity > 0 && Cfg::DstMaxArity <= __DstMaxArity);
@@ -41,7 +42,6 @@ namespace AbstractVM
 		return TypeInfo{ sizeof(T), alignof(T) };
 	}
 
-	// types, used types(for const segment)
 	template<typename T, typename U>
 	class SegmentImpl;
 
@@ -53,6 +53,8 @@ namespace AbstractVM
 		USE_TYPE_PACK(TypePack<Ts...>)
 
 	public:
+		FORCE_INLINE operator const Base&() const noexcept { return *reinterpret_cast<const Base*>(this); }
+		FORCE_INLINE operator Base&() noexcept { return *reinterpret_cast<Base*>(this); }
 		explicit SegmentImpl(size_t count, size_t vectorCapacity = 1)
 			: Base()
 		{
@@ -137,15 +139,17 @@ namespace AbstractVM
 		using Base = Program<Config>;
 
 	public:
+		FORCE_INLINE operator const Base&() const noexcept { return *reinterpret_cast<const Base*>(this); }
+		FORCE_INLINE operator Base&() noexcept { return *reinterpret_cast<Base*>(this); }
 		static constexpr auto TypesCount = sizeof...(Ts);
 		using ConstT = ConstSegmentImpl<TypePack<Ts...>, TypePack<Cs...>>;
 
-		explicit ProgramImpl(size_t maxConst, size_t vectorCapacity = 1)
+		explicit ProgramImpl(size_t vectorCapacity = 1)
 			: Base()
 		{
-			if (maxConst > 0)
+			if constexpr (Cfg::MaxConstantsCount > 0)
 			{
-				((ConstT&)Constants()).Init(maxConst, vectorCapacity);
+				((ConstT&)Base::Constants()).Init(Cfg::MaxConstantsCount, vectorCapacity);
 			}
 		}
 
@@ -159,7 +163,7 @@ namespace AbstractVM
 			return (ConstT&)Base::Constants();
 		}
 
-		~ProgramImpl()
+		FORCE_INLINE ~ProgramImpl()
 		{
 			((ConstT&)Constants()).Destroy();
 		}
@@ -187,13 +191,15 @@ namespace AbstractVM
 		}
 	};
 
-	template<VMConfigSpec Cfg, typename... Ts>
+	template<VMConfig Cfg, typename... Ts>
 	class StackImpl : private Stack<sizeof...(Ts)>
 	{
 		DISALLOW_COPY_MOVE_AND_ASSIGN(StackImpl);
 		using Base = Stack<sizeof...(Ts)>;
 		using SegmentT = DataSegmentImpl<TypePack<Ts...>>;
 	public:
+		FORCE_INLINE operator const Base&() const noexcept { return *reinterpret_cast<const Base*>(this); }
+		FORCE_INLINE operator Base&() noexcept { return *reinterpret_cast<Base*>(this); }
 		void Init(size_t stackSize, size_t vectorCapacity = 1)
 		{
 			((SegmentT&)Base::GetSegment()).Init(stackSize, vectorCapacity);
@@ -232,11 +238,13 @@ namespace AbstractVM
 		using ConstTypes = TypePack<Cs...>;
 		using Base = MachineImplBase<Ts...>;
 		using MachineBase = Machine<Config>;
-		using Machine<Config>::GetStack;
+		using MachineBase::GetStack;
+
+	public:
 		using BaseProgramT = Program<Config>;
-		using ProgramT = ProgramImpl<Config, Types, ConstTypes>;
+		using ProgramT = ProgramImpl<Cfg, Types, ConstTypes>;
 		using InputT = DataSegmentImpl<Types>;
-		using StackT = StackImpl<Config, Ts...>;
+		using StackT = StackImpl<Cfg, Ts...>;
 		using BaseSegmentT = Segment<Config::TypesCount>;
 		using ResultT = std::tuple<const Ts* RESTRICT...>;
 

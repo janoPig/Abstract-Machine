@@ -118,6 +118,7 @@
       <PreprocessorDefinitions>"_DST_MAX_ARITY=3";_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -140,6 +141,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="dsl_const_tests.cpp" />
     <ClCompile Include="dsl_tests.cpp" />
     <ClCompile Include="eigen_test.cpp" />
     <ClCompile Include="extended_tests.cpp" />

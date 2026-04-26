@@ -12,22 +12,24 @@ namespace TestDslUtils
 		ASSERT_TRUE(result) << result.error().message;
 	}
 
-	template<AbstractVM::VMConfigSpec Cfg>
-	void AssertRoundtrip(const AbstractVM::DslCompiler<Cfg>& compiler, const char* dsl)
+	template<typename MachineT>
+	void AssertRoundtrip(const AbstractVM::DslCompiler<typename MachineT::Config>& compiler, const char* dsl)
 	{
-		using ProgramT = AbstractVM::Program<Cfg>;
+		using ProgramT = typename MachineT::ProgramT;
+		using DslT = AbstractVM::DslCompiler<typename MachineT::Config>;
+		using DslProgramT = typename DslT::ProgramT;
 		ProgramT first{};
-		const auto firstCompile = compiler.Compile(dsl, first);
+		const auto firstCompile = compiler.Compile(dsl, (DslProgramT&)first);
 		ASSERT_TRUE(firstCompile) << firstCompile.error().message;
 
-		const auto firstDsl = compiler.Decompile(first);
+		const auto firstDsl = compiler.Decompile((const DslProgramT&)first);
 		ASSERT_TRUE(firstDsl);
 
 		ProgramT second{};
-		const auto secondCompile = compiler.Compile(*firstDsl, second);
+		const auto secondCompile = compiler.Compile(*firstDsl, (DslProgramT&)second);
 		ASSERT_TRUE(secondCompile) << secondCompile.error().message;
 
-		const auto secondDsl = compiler.Decompile(second);
+		const auto secondDsl = compiler.Decompile((const DslProgramT&)second);
 		ASSERT_TRUE(secondDsl);
 		EXPECT_EQ(*firstDsl, *secondDsl);
 

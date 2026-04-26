@@ -25,6 +25,7 @@ namespace AbstractVM
 		typename std::integral_constant<size_t, Cfg::SrcMaxArity>;
 		typename std::integral_constant<size_t, Cfg::DstMaxArity>;
 		typename std::integral_constant<size_t, Cfg::MaxProgramSize>;
+		typename std::integral_constant<size_t, Cfg::MaxConstantsCount>;
 		// declared by TypePack<Ts...>
 		typename std::integral_constant<size_t, Cfg::TypesCount>;
 		typename std::integral_constant<size_t, Cfg::ConstTypesCount>;

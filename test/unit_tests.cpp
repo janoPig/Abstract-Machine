@@ -39,6 +39,7 @@ struct TestConfig
 	static constexpr size_t DstMaxArity = 1;
 	static constexpr size_t SrcMaxArity = 2;
 	static constexpr size_t MaxProgramSize = 32;
+	static constexpr size_t MaxConstantsCount = 8;
 	static constexpr size_t TypesCount = 2;
 	static constexpr size_t ConstTypesCount = 2;
 };

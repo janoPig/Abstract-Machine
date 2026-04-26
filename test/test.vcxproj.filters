@@ -34,6 +34,9 @@
     <ClCompile Include="scalar_tests.cpp">
       <Filter>test</Filter>
     </ClCompile>
+    <ClCompile Include="dsl_const_tests.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\gtest\GTestLite.h">

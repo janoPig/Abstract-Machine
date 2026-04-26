@@ -48,6 +48,7 @@ add_executable(unit_tests
 
 add_executable(dsl_tests
   test/dsl_tests.cpp
+  test/dsl_const_tests.cpp
   test/test.cpp
 )
 

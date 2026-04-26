@@ -59,7 +59,7 @@ Every `SegmentImpl` maintains **one heap-allocated typed array per type** in the
 | Segment | Symbol | Description |
 |---|---|---|
 | Input (data) | `I[n]` | Read-only runtime inputs provided per execution |
-| Constants | `C[n]` | Mutable values embedded in the `Program`, written once before execution |
+| Constants | `C[n]` | Mutable values embedded in the `Program`, can be initialized via `CONST` block in DSL |
 | Stack | `S[n]` | Output slots; grows monotonically as instructions execute |
 
 Addresses encode segment type + element offset: `I[0]`, `C<float>[1]`, `S[3]`.  
@@ -74,13 +74,24 @@ The VM uses a text-based DSL for program definition. Each instruction consists o
 ### Address Format
 Addresses are encoded as `Segment<Type>[Offset]`:
 * `I<T>[n]`: Input segment (Read-only data provided at runtime).
-* `C<T>[n]`: Constant segment (Read-only data baked into the program).
+* `C<T>[n]`: Constant segment (Pre-defined data baked into the program).
 * `S<T>[n]`: Stack segment (Read-write temporary storage).
+
+### Constant Block
+You can define scalar constants (float, int) at the beginning of the program:
+```text
+CONST <float> [0.5, -1.0, 3.14]
+CONST <int> [42, 1337]
+```
+These values are mapped to `C<float>[0..2]` and `C<int>[0..1]` respectively.
 
 ### Complex Example: Self-Attention (Transformer)
 The following script demonstrates a functional **Self-Attention** forward pass using the `EigenOps` example backend.
 
 ```text
+# Step 0: Define constants
+CONST <float> [0.7071]                        # 1/sqrt(dk) where dk=2
+
 # Step 1: Project input X to Query, Key, and Value matrices
 # X: [SeqLen x Dim], Wq/Wk/Wv: [Dim x Dim]
 S<EMatF>[0] = MatMulF I<EMatF>[0] I<EMatF>[1]    # Q = X * Wq

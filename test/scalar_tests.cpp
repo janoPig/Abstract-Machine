@@ -79,6 +79,7 @@ protected:
 		static constexpr size_t DstMaxArity = 1;
 		static constexpr size_t SrcMaxArity = 2;
 		static constexpr size_t MaxProgramSize = 32;
+		static constexpr size_t MaxConstantsCount = 8;
 	};
 
 	using MachineT = MachineImpl<TestConfig, TypePack<float, int>, TypePack<float, int>>;
@@ -102,7 +103,7 @@ protected:
 
 	ProgramT* MakeProgram(const char* dsl)
 	{
-		auto* prog = new ProgramT(8);
+		auto* prog = new ProgramT();
 		TestDslUtils::CompileOrFail(*compiler, dsl, *prog);
 		return prog;
 	}

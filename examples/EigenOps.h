@@ -3,6 +3,10 @@
 #include "../include/OpImpl.h"
 #include "../include/AbstractVM.h"
 #include "../include/InstructionSet.h"
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 5054) // operator '*': deprecated between enumerations of different types
+#endif
 #include <Eigen/Dense>
 #include <Eigen/QR>
 #include <Eigen/LU>
@@ -1389,3 +1393,7 @@ namespace EigenOps
 			&& (FuzzyVecOpProvider<Ts>::AddTo(iset, reg, selection) && ...);
 	}
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

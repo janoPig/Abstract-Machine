@@ -248,6 +248,7 @@ class MachineIntegrationTest : public ::GTestLite::Test
 		static constexpr size_t DstMaxArity = 1;
 		static constexpr size_t SrcMaxArity = 2;
 		static constexpr size_t MaxProgramSize = 32;
+		static constexpr size_t MaxConstantsCount = 8;
 	};
 protected:
 	using MachineT = MachineImpl<TestConfig, TypePack<EMatF, EVecF, float>>;
@@ -271,7 +272,7 @@ protected:
 	// Compile DSL into a fresh Program. Constants segment has constSlots slots.
 	ProgramT* MakeProgram(const char* dsl)
 	{
-		auto* prog = new ProgramT(16, 100);
+		auto* prog = new ProgramT(100);
 		TestDslUtils::CompileOrFail(*compiler, dsl, *prog);
 		return prog;
 	}
@@ -498,12 +499,13 @@ TEST_F(MachineIntegrationTest, SelfAttention_ForwardPass)
 	// Weights = Softmax(Scores)
 	// Output = Weights * V
 	program = MakeProgram(
+		"CONST <float> [0.7071]\n"
 		"S[0] = MatMulF I[0] I[1]\n"       // Q = X * Wq
 		"S[1] = MatMulF I[0] I[2]\n"       // K = X * Wk
 		"S[2] = MatMulF I[0] I[3]\n"       // V = X * Wv
 		"S[3] = MatTransposeF S[1]\n"      // K^T
 		"S[4] = MatMulF S[0] S[3]\n"       // Q * K^T
-		"S[5] = MatMulScalarF S[4] C[0]\n" // Scaled = Scores * (1/sqrt(dk))
+		"S[5] = MatMulScalarF S[4] C<float>[0]\n" // Scaled = Scores * (1/sqrt(dk))
 		"S[6] = MatSoftmaxF S[5]\n"        // Weights = Softmax(Scaled)
 		"S[7] = MatMulF S[6] S[2]\n"       // Output = Weights * V
 	);
@@ -517,8 +519,8 @@ TEST_F(MachineIntegrationTest, SelfAttention_ForwardPass)
 	fill(input.GetData<EMatF>()[2], 2, 2, 0.0f, 1.0f, 1.0f, 0.0f); // Wk = Swap
 	fill(input.GetData<EMatF>()[3], 2, 2, 0.5f, 0.5f, 0.5f, 0.5f); // Wv = Const
 
-	// Scale factor (1/sqrt(dk)): dk=2 => 1/sqrt(2) approx 0.7071
-	program->GetConst<2>()[0] = 0.7071f;
+	// Scale factor (1/sqrt(dk)): dk=2 => 1/sqrt(2) approx 0.7071 - now in CONST block
+
 
 	vm.Run(*program, input);
 
